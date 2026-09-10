@@ -8,6 +8,9 @@ export const AuthModal = ({ isOpen, onClose, onLoginSuccess, initialRole = 'prov
   const [password, setPassword] = useState('password123');
   const [showTokenPreview, setShowTokenPreview] = useState(false);
   const [generatedToken, setGeneratedToken] = useState(null);
+  // ALL hooks must be declared before any conditional return (React Rules of Hooks)
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Re-sync internal state whenever the gateway role button changes
   useEffect(() => {
@@ -32,16 +35,23 @@ export const AuthModal = ({ isOpen, onClose, onLoginSuccess, initialRole = 'prov
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const session = authenticateUser(email, password, role);
-    setGeneratedToken(session.token);
-    setShowTokenPreview(true);
-    
-    setTimeout(() => {
-      onLoginSuccess(session);
-      onClose();
-    }, 1200);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const session = await authenticateUser(email, password, role);
+      setGeneratedToken(session.token);
+      setShowTokenPreview(true);
+      setTimeout(() => {
+        onLoginSuccess(session);
+        onClose();
+      }, 800);
+    } catch (err) {
+      setError(err.message || 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -56,10 +66,10 @@ export const AuthModal = ({ isOpen, onClose, onLoginSuccess, initialRole = 'prov
             </div>
             <div>
               <h3 className="font-display font-semibold text-lg text-foreground">
-                Role Authentication (Fake JWT Prototype)
+                Role Authentication
               </h3>
               <p className="text-xs text-muted-foreground font-mono">
-                Select target RBAC role to generate simulated JWT token
+                JWT-backed login with PROVIDER / NGO / ADMIN roles
               </p>
             </div>
           </div>
@@ -167,6 +177,12 @@ export const AuthModal = ({ isOpen, onClose, onLoginSuccess, initialRole = 'prov
             />
           </div>
 
+          {error && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 text-xs">
+              {error}
+            </div>
+          )}
+
           {/* Token Generation Preview */}
           {showTokenPreview && generatedToken && (
             <div className="p-3 rounded-xl bg-pineCanopy text-milledStone border border-spiceGold/40 text-[11px] space-y-1 animate-pulse">
@@ -183,7 +199,7 @@ export const AuthModal = ({ isOpen, onClose, onLoginSuccess, initialRole = 'prov
             type="submit"
             className="btn-primary-gold w-full py-4 rounded-xl font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-accent"
           >
-            <span>Generate JWT Session & Enter Portal</span>
+            <span>{isLoading ? 'Signing in...' : 'Sign In & Enter Portal'}</span>
             <ArrowRight className="h-4 w-4" />
           </button>
         </form>

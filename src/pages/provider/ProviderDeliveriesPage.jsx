@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../lib/api';
 import {
   Truck, MapPin, Clock, CheckCircle2, Package, PhoneCall,
   Navigation, AlertTriangle, ArrowRight, ChevronRight, Activity,
@@ -16,7 +17,7 @@ const PICKUP_STEPS = [
   { id: 'completed',      label: 'Pickup Completed',  desc: 'Food successfully received by NGO' },
 ];
 
-const MOCK_ACCEPTANCE = {
+const FALLBACK_ACCEPTANCE = {
   food:         'Paneer Butter Masala',
   quantity:     '50 kg',
   portions:     200,
@@ -31,19 +32,72 @@ const MOCK_ACCEPTANCE = {
 
 export const ProviderDeliveriesPage = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1); // 0-indexed into PICKUP_STEPS
+  const [pickup, setPickup] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentStep, setCurrentStep] = useState(1);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.getProviderPickups();
+        const active = (res.data || []).find((p) => p.pickupStatus !== 'COMPLETED') || res.data?.[0];
+        setPickup(active || null);
+        if (active?.pickupStatus === 'COMPLETED') {
+          setIsCompleted(true);
+          setCurrentStep(4);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const acceptance = pickup
+    ? {
+        food: pickup.food,
+        quantity: `${pickup.quantity} portions`,
+        ngoName: pickup.ngoName,
+        distanceKm: pickup.distance,
+        travelMin: pickup.eta,
+        route: pickup.route ? `${pickup.route.distanceKm} km — ${pickup.route.durationMinutes} min` : 'Calculating...',
+        redistScore: 87,
+      }
+    : FALLBACK_ACCEPTANCE;
 
   const currentStepData = PICKUP_STEPS[currentStep];
   const isLastStep = currentStep === PICKUP_STEPS.length - 1;
 
-  const handleAdvanceStep = () => {
+  const handleAdvanceStep = async () => {
+    if (currentStep === 3 && pickup?.pickupId) {
+      setIsConfirming(true);
+      try {
+        await api.confirmHandover(pickup.pickupId);
+        setIsCompleted(true);
+        setCurrentStep(4);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsConfirming(false);
+      }
+      return;
+    }
+
     if (isLastStep) {
       setIsCompleted(true);
     } else {
       setCurrentStep((s) => s + 1);
     }
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-muted-foreground font-mono text-sm">Loading pickup data...</div>;
+  }
 
   const getStepActionLabel = () => {
     switch (currentStep) {
@@ -77,11 +131,22 @@ export const ProviderDeliveriesPage = () => {
 
         <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-mossVerified/10 border border-mossVerified/30 text-mossVerified font-mono text-xs font-bold">
           <span className="h-2 w-2 rounded-full bg-mossVerified animate-pulse" />
-          <span>1 Active Pickup</span>
+          <span>{pickup ? '1 Active Pickup' : 'No Active Pickup'}</span>
         </div>
       </div>
 
-      {/* Completion Screen */}
+      {error && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 text-sm">{error}</div>
+      )}
+
+      {!pickup && !isCompleted && (
+        <div className="p-12 text-center text-muted-foreground font-mono text-sm border border-dashed border-border rounded-2xl">
+          No active pickups yet. Register surplus food and wait for an NGO to accept.
+        </div>
+      )}
+
+      {(pickup || isCompleted) && (
+      <>
       {isCompleted ? (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -132,7 +197,7 @@ export const ProviderDeliveriesPage = () => {
                     NGO Accepted Your Food
                   </span>
                   <h3 className="font-display font-semibold text-lg text-foreground">
-                    {MOCK_ACCEPTANCE.ngoName}
+                    {acceptance.ngoName}
                   </h3>
                 </div>
               </div>
@@ -140,32 +205,32 @@ export const ProviderDeliveriesPage = () => {
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <span className="text-[10px] text-muted-foreground block">Food</span>
-                  <strong className="text-foreground">{MOCK_ACCEPTANCE.food}</strong>
+                  <strong className="text-foreground">{acceptance.food}</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <span className="text-[10px] text-muted-foreground block">Quantity</span>
-                  <strong className="text-foreground">{MOCK_ACCEPTANCE.quantity}</strong>
+                  <strong className="text-foreground">{acceptance.quantity}</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <span className="text-[10px] text-muted-foreground block">Distance</span>
-                  <strong className="text-foreground">{MOCK_ACCEPTANCE.distanceKm} km</strong>
+                  <strong className="text-foreground">{acceptance.distanceKm} km</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-background border border-border">
                   <span className="text-[10px] text-muted-foreground block">ETA</span>
-                  <strong className="text-spiceGold">{MOCK_ACCEPTANCE.travelMin} minutes</strong>
+                  <strong className="text-spiceGold">{acceptance.travelMin} minutes</strong>
                 </div>
               </div>
 
               <div className="p-3 rounded-xl bg-background border border-border text-xs font-mono flex items-center gap-2">
                 <PhoneCall className="h-3.5 w-3.5 text-spiceGold shrink-0" />
                 <span className="text-muted-foreground">NGO Contact:</span>
-                <strong className="text-foreground">{MOCK_ACCEPTANCE.ngoContact}</strong>
+                <strong className="text-foreground">{acceptance.ngoContact}</strong>
               </div>
 
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 text-xs font-mono flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
                 <span className="text-amber-800 dark:text-amber-300">
-                  Redistribution window: <strong>{MOCK_ACCEPTANCE.window}</strong>
+                  Redistribution window: <strong>{acceptance.window}</strong>
                 </span>
               </div>
             </motion.div>
@@ -251,9 +316,9 @@ export const ProviderDeliveriesPage = () => {
               <div className="relative z-10 flex items-center justify-between font-mono text-xs mb-6">
                 <div className="flex items-center gap-2 rounded-full bg-black/30 px-4 py-1.5 border border-spiceGold/40">
                   <Navigation className="h-3.5 w-3.5 text-spiceGold" />
-                  <span>{MOCK_ACCEPTANCE.route}</span>
+                  <span>{acceptance.route}</span>
                 </div>
-                <span className="text-spiceGold font-bold">{MOCK_ACCEPTANCE.distanceKm} km</span>
+                <span className="text-spiceGold font-bold">{acceptance.distanceKm} km</span>
               </div>
 
               {/* NGO → Provider Flow Diagram */}
@@ -264,7 +329,7 @@ export const ProviderDeliveriesPage = () => {
                     <HeartHandshake className="h-7 w-7" />
                   </div>
                   <div className="mt-2 px-4 py-1.5 rounded-xl bg-black/40 border border-mossVerified/40 text-xs font-mono text-center">
-                    <p className="font-bold text-mossVerified">{MOCK_ACCEPTANCE.ngoName}</p>
+                    <p className="font-bold text-mossVerified">{acceptance.ngoName}</p>
                     <p className="text-slate-300 text-[10px]">NGO Receiver</p>
                   </div>
                 </div>
@@ -278,8 +343,8 @@ export const ProviderDeliveriesPage = () => {
                     <ArrowDown className="h-5 w-5 text-spiceGold" />
                   </motion.div>
                   <div className="px-4 py-2 rounded-xl bg-spiceGold/20 border border-spiceGold/40 text-center">
-                    <p className="text-spiceGold font-bold text-xs font-mono">{MOCK_ACCEPTANCE.travelMin} minutes ETA</p>
-                    <p className="text-slate-300 text-[10px] font-mono">{MOCK_ACCEPTANCE.distanceKm} km via fastest route</p>
+                    <p className="text-spiceGold font-bold text-xs font-mono">{acceptance.travelMin} minutes ETA</p>
+                    <p className="text-slate-300 text-[10px] font-mono">{acceptance.distanceKm} km via fastest route</p>
                   </div>
                   <motion.div
                     animate={{ y: [0, 8, 0] }}
@@ -305,15 +370,15 @@ export const ProviderDeliveriesPage = () => {
               <div className="relative z-10 grid grid-cols-3 gap-4 pt-4 border-t border-white/10 text-xs font-mono">
                 <div>
                   <span className="text-slate-400 block text-[11px]">Distance</span>
-                  <strong className="text-white">{MOCK_ACCEPTANCE.distanceKm} km</strong>
+                  <strong className="text-white">{acceptance.distanceKm} km</strong>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Travel ETA</span>
-                  <strong className="text-spiceGold">{MOCK_ACCEPTANCE.travelMin} minutes</strong>
+                  <strong className="text-spiceGold">{acceptance.travelMin} minutes</strong>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Redistrib. Window</span>
-                  <strong className="text-emerald-400">{MOCK_ACCEPTANCE.window}</strong>
+                  <strong className="text-emerald-400">{acceptance.window}</strong>
                 </div>
               </div>
             </div>
@@ -327,19 +392,19 @@ export const ProviderDeliveriesPage = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
                 <div className="p-3 rounded-xl bg-muted/40 border border-border">
                   <span className="text-[10px] text-muted-foreground block">Food</span>
-                  <strong className="text-foreground text-sm">{MOCK_ACCEPTANCE.food}</strong>
+                  <strong className="text-foreground text-sm">{acceptance.food}</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-muted/40 border border-border">
                   <span className="text-[10px] text-muted-foreground block">Quantity</span>
-                  <strong className="text-foreground text-sm">{MOCK_ACCEPTANCE.quantity}</strong>
+                  <strong className="text-foreground text-sm">{acceptance.quantity}</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-muted/40 border border-border">
                   <span className="text-[10px] text-muted-foreground block">Portions</span>
-                  <strong className="text-mossVerified text-sm">{MOCK_ACCEPTANCE.portions}</strong>
+                  <strong className="text-mossVerified text-sm">{acceptance.portions}</strong>
                 </div>
                 <div className="p-3 rounded-xl bg-muted/40 border border-border">
                   <span className="text-[10px] text-muted-foreground block">AI Score</span>
-                  <strong className="text-spiceGold text-sm">{MOCK_ACCEPTANCE.redistScore}%</strong>
+                  <strong className="text-spiceGold text-sm">{acceptance.redistScore}%</strong>
                 </div>
               </div>
 
@@ -356,6 +421,8 @@ export const ProviderDeliveriesPage = () => {
           </div>
 
         </div>
+      )}
+      </>
       )}
     </div>
   );

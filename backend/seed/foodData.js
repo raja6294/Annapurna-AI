@@ -1,0 +1,47 @@
+module.exports = [
+  {
+    foodName: 'Paneer Butter Masala',
+    category: 'Cooked Meals (Vegetarian)',
+    foodType: 'VEGETARIAN',
+    quantityKg: 50,
+    numberOfPortions: 100,
+    storageMethod: 'Insulated Thermal Containers',
+    storageTemperature: 62,
+    packagingType: 'Thermal Box',
+    packagingCondition: 'Good',
+    handlingInformation: 'Maintained above 60C since preparation',
+    images: [
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80',
+    ],
+  },
+  {
+    foodName: 'Steamed Rice',
+    category: 'Cooked Meals (Vegetarian)',
+    foodType: 'VEGETARIAN',
+    quantityKg: 30,
+    numberOfPortions: 120,
+    storageMethod: 'Insulated Thermal Containers',
+    storageTemperature: 65,
+    packagingType: 'Steel Container',
+    packagingCondition: 'Intact',
+    handlingInformation: 'Covered and stored in hot box',
+    images: [
+      'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80',
+    ],
+  },
+  {
+    foodName: 'Vegetable Curry',
+    category: 'Cooked Meals (Vegetarian)',
+    foodType: 'VEGETARIAN',
+    quantityKg: 25,
+    numberOfPortions: 80,
+    storageMethod: 'Stainless Steel Hot Boxes',
+    storageTemperature: 58,
+    packagingType: 'Hot Box',
+    packagingCondition: 'Good',
+    handlingInformation: 'Minimal exposure, lid sealed',
+    images: [
+      'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600&auto=format&fit=crop&q=80',
+    ],
+  },
+];

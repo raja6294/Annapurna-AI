@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Upload, Sparkles, CheckCircle2, Clock, MapPin, AlertTriangle, ShieldCheck, ArrowRight, RefreshCw, Box, Thermometer, Info } from 'lucide-react';
+import { Camera, Upload, Sparkles, AlertTriangle, ArrowRight, RefreshCw, Box, Thermometer, Info } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { api } from '../../lib/api';
 
 export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const navigate = useNavigate();
@@ -20,74 +21,108 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
 
   // AI Assessment State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiResult, setAiResult] = useState(null);
+  const [foodId, setFoodId] = useState(null);
+  const [error, setError] = useState(null);
   const [tempSlider, setTempSlider] = useState(65);
-  const [storageTimeHours, setStorageTimeHours] = useState(2);
 
-  const handleRunAiAnalysis = () => {
+  const handleRunAiAnalysis = async () => {
     setIsAnalyzing(true);
     setAiResult(null);
+    setError(null);
 
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      const calculatedWindow = Math.max(1.5, Math.min(8.0, (80 - tempSlider * 0.3 - storageTimeHours * 8) / 10)).toFixed(1);
-      const isUrgent = calculatedWindow < 2.5;
+    try {
+      let currentFoodId = foodId;
+
+      if (!currentFoodId) {
+        const formData = new FormData();
+        formData.append('foodName', foodName);
+        formData.append('category', category);
+        formData.append('foodType', category.includes('Non-Vegetarian') ? 'NON_VEGETARIAN' : 'VEGETARIAN');
+        formData.append('quantityKg', quantityKg);
+        formData.append('numberOfPortions', Math.round(Number(quantityKg) * 2));
+        formData.append('preparedAt', new Date(Date.now() - 90 * 60000).toISOString());
+        formData.append('surplusAt', new Date(Date.now() - 60 * 60000).toISOString());
+        formData.append('storageMethod', storageCondition);
+        formData.append('storageTemperature', tempSlider);
+        formData.append('packagingCondition', 'Good');
+        formData.append('handlingInformation', 'Maintained in thermal storage');
+        formData.append('imageUrls', JSON.stringify(photos));
+
+        const created = await api.createFood(formData);
+        currentFoodId = created.data._id;
+        setFoodId(currentFoodId);
+      }
+
+      const assessment = await api.assessFood(currentFoodId);
+      const { result } = assessment.data;
+      const matches = await api.getMatches(currentFoodId);
 
       setAiResult({
-        detectedFood: "Paneer Butter Masala with Steamed Basmati Rice",
-        confidence: 94.2,
-        isVeg: true,
-        freshnessScore: isUrgent ? 64 : 94,
-        visualCondition: isUrgent ? "Consume Soon (Thermal Depletion)" : "Good",
-        recommendation: "Recommended for further verification",
-        estimatedWindowHours: 4.17, // 4h 10m
-        urgency: isUrgent ? "warning" : "fresh",
-        spoiledFlag: false,
-        matchedNgo: {
-          id: "NGO-101",
-          name: "Hope Welfare Centre",
-          distanceKm: 4.2,
-          travelMinutes: 22,
-          capacityAvailable: 150,
-          matchScore: 96
-        }
+        detectedFood: result.vision.detectedFood,
+        confidence: Math.round(result.vision.confidence * 100),
+        freshnessScore: result.score,
+        visualCondition: result.vision.visualCondition,
+        recommendation:
+          result.status === 'RECOMMENDED'
+            ? 'Recommended for Redistribution (Advisory Only)'
+            : result.status === 'MANUAL_REVIEW'
+            ? 'Manual Review Recommended'
+            : 'Not Recommended for Redistribution',
+        estimatedWindowHours: (result.estimatedWindowMinutes / 60).toFixed(1),
+        urgency: result.estimatedWindowMinutes < 120 ? 'warning' : 'fresh',
+        status: result.status,
+        matchedNgo: matches.data.recommended
+          ? {
+              id: matches.data.recommended.ngoId,
+              name: matches.data.recommended.ngoName,
+              distanceKm: matches.data.recommended.distance,
+              travelMinutes: matches.data.recommended.travelTime,
+              matchScore: matches.data.recommended.matchScore,
+            }
+          : null,
       });
-    }, 1500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const handleSubmitDonation = (e) => {
+  const handleSubmitDonation = async (e) => {
     e.preventDefault();
-    if (!aiResult) return;
+    if (!aiResult || !foodId) return;
 
-    confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
+    setIsSubmitting(true);
+    setError(null);
 
-    const newListing = {
-      id: `FOOD-2026-00${listings.length + 1}`,
-      providerName: "Taj Grand Kitchens & Banquet",
-      providerType: "Institutional Kitchen",
-      providerBadge: "Verified Provider",
-      foodName,
-      category,
-      quantityKg: Number(quantityKg),
-      portions: Math.round(Number(quantityKg) * 2),
-      prepTime,
-      storageCondition,
-      temperatureC: Number(tempSlider),
-      location,
-      lat: 28.6250,
-      lng: 77.2100,
-      status: "Live",
-      freshnessScore: aiResult.freshnessScore,
-      freshnessWindowHours: aiResult.estimatedWindowHours,
-      urgencyLevel: aiResult.urgency,
-      allergens,
-      photos,
-      aiResult,
-      matchedNgo: aiResult.matchedNgo
-    };
+    try {
+      if (aiResult.status === 'NOT_RECOMMENDED') {
+        throw new Error('Food marked NOT_RECOMMENDED cannot be made available');
+      }
 
-    onAddNewListing(newListing);
-    navigate('/provider/deliveries');
+      await api.makeFoodAvailable(foodId);
+      confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
+
+      if (onAddNewListing) {
+        onAddNewListing({
+          id: foodId,
+          foodName,
+          category,
+          quantityKg: Number(quantityKg),
+          portions: Math.round(Number(quantityKg) * 2),
+          freshnessScore: aiResult.freshnessScore,
+          status: 'Live',
+        });
+      }
+
+      navigate('/provider/deliveries');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -276,6 +311,12 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
                 </div>
               )}
 
+              {error && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 text-xs mb-4">
+                  {error}
+                </div>
+              )}
+
               {aiResult && (
                 <div className="space-y-4 font-mono text-xs">
                   <div className="p-4 rounded-xl bg-spiceGold/10 border border-spiceGold/30">
@@ -304,9 +345,10 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
 
                   <button
                     onClick={handleSubmitDonation}
-                    className="btn-primary-gold w-full py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md"
+                    disabled={isSubmitting || aiResult.status === 'NOT_RECOMMENDED'}
+                    className="btn-primary-gold w-full py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
                   >
-                    <span>MAKE FOOD AVAILABLE — Track Pickup</span>
+                    <span>{isSubmitting ? 'Publishing...' : 'MAKE FOOD AVAILABLE — Track Pickup'}</span>
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
