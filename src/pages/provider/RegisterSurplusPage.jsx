@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Upload, Sparkles, AlertTriangle, ArrowRight, RefreshCw, Box, Thermometer, Info } from 'lucide-react';
+import { Camera, Sparkles, Box, Thermometer, Info, ArrowRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { api } from '../../lib/api';
+import FoodImageUploader from '../../components/FoodImageUploader';
+import FreshnessResult from '../../components/FreshnessResult';
 
 export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const navigate = useNavigate();
@@ -15,9 +17,7 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const [storageCondition, setStorageCondition] = useState('Insulated Thermal Cases');
   const [location, setLocation] = useState('Vasant Kunj, South Delhi');
   const [allergens, setAllergens] = useState(['Dairy', 'Nuts']);
-  const [photos, setPhotos] = useState([
-    'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80'
-  ]);
+  const [uploadedImageUrls, setUploadedImageUrls] = useState([]);
 
   // AI Assessment State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -28,61 +28,25 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const [tempSlider, setTempSlider] = useState(65);
 
   const handleRunAiAnalysis = async () => {
+    if (uploadedImageUrls.length === 0) {
+      setError('Please upload at least one food photo first.');
+      return;
+    }
+
     setIsAnalyzing(true);
     setAiResult(null);
     setError(null);
 
     try {
-      let currentFoodId = foodId;
+      const analysisPayload = {
+        imageUrls: uploadedImageUrls,
+        foodName,
+        category,
+        storageMethod: storageCondition,
+      };
 
-      if (!currentFoodId) {
-        const formData = new FormData();
-        formData.append('foodName', foodName);
-        formData.append('category', category);
-        formData.append('foodType', category.includes('Non-Vegetarian') ? 'NON_VEGETARIAN' : 'VEGETARIAN');
-        formData.append('quantityKg', quantityKg);
-        formData.append('numberOfPortions', Math.round(Number(quantityKg) * 2));
-        formData.append('preparedAt', new Date(Date.now() - 90 * 60000).toISOString());
-        formData.append('surplusAt', new Date(Date.now() - 60 * 60000).toISOString());
-        formData.append('storageMethod', storageCondition);
-        formData.append('storageTemperature', tempSlider);
-        formData.append('packagingCondition', 'Good');
-        formData.append('handlingInformation', 'Maintained in thermal storage');
-        formData.append('imageUrls', JSON.stringify(photos));
-
-        const created = await api.createFood(formData);
-        currentFoodId = created.data._id;
-        setFoodId(currentFoodId);
-      }
-
-      const assessment = await api.assessFood(currentFoodId);
-      const { result } = assessment.data;
-      const matches = await api.getMatches(currentFoodId);
-
-      setAiResult({
-        detectedFood: result.vision.detectedFood,
-        confidence: Math.round(result.vision.confidence * 100),
-        freshnessScore: result.score,
-        visualCondition: result.vision.visualCondition,
-        recommendation:
-          result.status === 'RECOMMENDED'
-            ? 'Recommended for Redistribution (Advisory Only)'
-            : result.status === 'MANUAL_REVIEW'
-            ? 'Manual Review Recommended'
-            : 'Not Recommended for Redistribution',
-        estimatedWindowHours: (result.estimatedWindowMinutes / 60).toFixed(1),
-        urgency: result.estimatedWindowMinutes < 120 ? 'warning' : 'fresh',
-        status: result.status,
-        matchedNgo: matches.data.recommended
-          ? {
-              id: matches.data.recommended.ngoId,
-              name: matches.data.recommended.ngoName,
-              distanceKm: matches.data.recommended.distance,
-              travelMinutes: matches.data.recommended.travelTime,
-              matchScore: matches.data.recommended.matchScore,
-            }
-          : null,
-      });
+      const assessment = await api.analyzeFoodImages(analysisPayload);
+      setAiResult(assessment.data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,11 +62,32 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
     setError(null);
 
     try {
-      if (aiResult.status === 'NOT_RECOMMENDED') {
-        throw new Error('Food marked NOT_RECOMMENDED cannot be made available');
+      if (!foodId) {
+        const formData = new FormData();
+        formData.append('foodName', foodName);
+        formData.append('category', category);
+        formData.append('foodType', category.includes('Non-Vegetarian') ? 'NON_VEGETARIAN' : 'VEGETARIAN');
+        formData.append('quantityKg', quantityKg);
+        formData.append('numberOfPortions', Math.round(Number(quantityKg) * 2));
+        formData.append('preparedAt', new Date(Date.now() - 90 * 60000).toISOString());
+        formData.append('surplusAt', new Date(Date.now() - 60 * 60000).toISOString());
+        formData.append('storageMethod', storageCondition);
+        formData.append('storageTemperature', tempSlider);
+        formData.append('packagingCondition', 'Good');
+        formData.append('handlingInformation', 'Maintained in thermal storage');
+        // If images were uploaded directly through the API, pass the URLs
+        formData.append('imageUrls', JSON.stringify(uploadedImageUrls));
+
+        const created = await api.createFood(formData);
+        const newFoodId = created.data._id;
+        setFoodId(newFoodId);
+        
+        // Immediately make it available after creation
+        await api.makeFoodAvailable(newFoodId);
+      } else {
+        await api.makeFoodAvailable(foodId);
       }
 
-      await api.makeFoodAvailable(foodId);
       confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
 
       if (onAddNewListing) {
@@ -245,32 +230,23 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
               Upload multiple images for visual AI freshness assessment.
             </p>
 
-            <div className="border-2 border-dashed border-spiceGold/40 rounded-2xl p-6 text-center bg-spiceGold/5 hover:bg-spiceGold/10 transition-all cursor-pointer">
-              <Upload className="h-8 w-8 text-spiceGold mx-auto mb-2" />
-              <p className="text-xs font-semibold text-foreground">Click to Upload Food Photos (Multiple Supported)</p>
-              <p className="text-[11px] text-muted-foreground font-mono mt-1">Simulated YOLOv8 Vision Inference</p>
-            </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              {photos.map((p, idx) => (
-                <div key={idx} className="relative h-16 w-20 rounded-xl overflow-hidden border-2 border-spiceGold shadow-sm">
-                  <img src={p} alt="Food angle" className="h-full w-full object-cover" />
-                  <span className="absolute bottom-0 inset-x-0 bg-spiceGold text-[9px] font-mono text-center text-pineCanopy font-bold py-0.5">
-                    Photo {idx + 1}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <FoodImageUploader
+              onUploadedUrls={(urls) => setUploadedImageUrls(urls)}
+              onUploadComplete={(urls) => {
+                // Keep URLs updated, allow manual run of AI analysis
+                setUploadedImageUrls(urls);
+              }}
+            />
 
             <button
               type="button"
               onClick={handleRunAiAnalysis}
-              disabled={isAnalyzing}
-              className="btn-primary-gold mt-6 w-full py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md"
+              disabled={isAnalyzing || uploadedImageUrls.length === 0}
+              className="btn-primary-gold mt-6 w-full py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
             >
               {isAnalyzing ? (
                 <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Executing Neural Vision Assessment...</span>
                 </>
               ) : (
@@ -280,6 +256,7 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
                 </>
               )}
             </button>
+
           </div>
         </div>
 
@@ -318,35 +295,13 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
               )}
 
               {aiResult && (
-                <div className="space-y-4 font-mono text-xs">
-                  <div className="p-4 rounded-xl bg-spiceGold/10 border border-spiceGold/30">
-                    <span className="text-[10px] text-muted-foreground block">Detected Food</span>
-                    <strong className="text-base text-foreground font-bold font-sans block mb-1">{aiResult.detectedFood}</strong>
-                    <div className="grid grid-cols-2 gap-2 text-[11px] mt-2 border-t border-spiceGold/20 pt-2">
-                      <div>Food Type: <strong className="text-mossVerified">Vegetarian</strong></div>
-                      <div>Confidence: <strong className="text-spiceGold">{aiResult.confidence}%</strong></div>
-                      <div>Visual Condition: <strong className="text-mossVerified">{aiResult.visualCondition}</strong></div>
-                      <div>Window: <strong className="text-spiceGold">4h 10m</strong></div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-card border border-border space-y-1">
-                    <span className="text-muted-foreground block">Redistribution Status:</span>
-                    <strong className="text-mossVerified font-bold text-xs">{aiResult.recommendation}</strong>
-                  </div>
-
-                  {/* Mandatory Safety Disclaimer */}
-                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-[11px] leading-relaxed">
-                    <p className="font-bold flex items-center gap-1.5 mb-0.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" /> Safety Disclaimer
-                    </p>
-                    AI provides a preliminary visual assessment and does not certify food safety or microbiological safety.
-                  </div>
+                <div className="space-y-4">
+                  <FreshnessResult result={aiResult} />
 
                   <button
                     onClick={handleSubmitDonation}
-                    disabled={isSubmitting || aiResult.status === 'NOT_RECOMMENDED'}
-                    className="btn-primary-gold w-full py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                    disabled={isSubmitting || aiResult.riskLevel === 'Critical' || aiResult.riskLevel === 'High'}
+                    className="btn-primary-gold w-full mt-4 py-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
                   >
                     <span>{isSubmitting ? 'Publishing...' : 'MAKE FOOD AVAILABLE — Track Pickup'}</span>
                     <ArrowRight className="h-4 w-4" />

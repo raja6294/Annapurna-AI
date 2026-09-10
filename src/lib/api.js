@@ -22,10 +22,18 @@ const request = async (endpoint, options = {}) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+  } catch (err) {
+    // Network-level error (backend unreachable)
+    if (err instanceof TypeError) {
+      throw new Error(
+        'Cannot connect to the backend server. Make sure it is running on port 5000 (cd backend && npm run dev).'
+      );
+    }
+    throw err;
+  }
 
   const data = await response.json().catch(() => ({}));
 
@@ -58,9 +66,18 @@ export const api = {
   makeFoodAvailable: (id) =>
     request(`/foods/${id}/available`, { method: 'PATCH' }),
 
-  // AI
+  // AI Assessment (existing — by food listing ID)
   assessFood: (foodId) =>
     request(`/ai/assess/${foodId}`, { method: 'POST' }),
+
+  // Food Image Scanning (new — direct image upload + Gemini analysis)
+  uploadFoodImages: (formData) =>
+    request('/food-scans/upload', { method: 'POST', body: formData }),
+  analyzeFoodImages: (payload) =>
+    request('/food-scans/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   // Matching
   getMatches: (foodId) => request(`/matching/food/${foodId}`),
@@ -89,6 +106,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getPickupRoute: (pickupId) => request(`/pickups/${pickupId}/route`),
+  getPickupLiveLocation: (pickupId) => request(`/pickups/${pickupId}/live-location`),
 
   // Admin
   getAdminDashboard: () => request('/admin/dashboard'),

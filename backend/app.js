@@ -19,6 +19,7 @@ const routeRoutes = require('./routes/routeRoutes');
 const distributionRoutes = require('./routes/distributionRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const foodScanRoutes = require('./routes/foodScanRoutes');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/routes', routeRoutes);
 app.use('/api/distribution', distributionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/food-scans', foodScanRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

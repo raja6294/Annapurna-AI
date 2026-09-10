@@ -120,4 +120,30 @@ const getPickupRoute = async (req, res, next) => {
   }
 };
 
-module.exports = { confirmHandover, updatePickupStatus, getPickupRoute };
+const getLiveLocation = async (req, res, next) => {
+  try {
+    const pickup = await Pickup.findById(req.params.pickupId).select(
+      'status currentLatitude currentLongitude pickupLocation destinationLocation etaMinutes updatedAt'
+    );
+    if (!pickup) {
+      return res.status(404).json({ success: false, message: 'Pickup not found' });
+    }
+    res.json({
+      success: true,
+      data: {
+        pickupId: pickup._id,
+        status: pickup.status,
+        currentLatitude: pickup.currentLatitude,
+        currentLongitude: pickup.currentLongitude,
+        providerLocation: pickup.pickupLocation,
+        ngoLocation: pickup.destinationLocation,
+        etaMinutes: pickup.etaMinutes,
+        lastUpdated: pickup.updatedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { confirmHandover, updatePickupStatus, getPickupRoute, getLiveLocation };
