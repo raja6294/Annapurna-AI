@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { api } from '../../lib/api';
 import FoodImageUploader from '../../components/FoodImageUploader';
 import FreshnessResult from '../../components/FreshnessResult';
+import { LocationPickerMap } from '../../components/LocationPickerMap';
 
 export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
   const [prepTime, setPrepTime] = useState('1.5 hours ago (12:30 PM)');
   const [storageCondition, setStorageCondition] = useState('Insulated Thermal Cases');
   const [location, setLocation] = useState('Vasant Kunj, South Delhi');
+  const [coordinates, setCoordinates] = useState({ lat: 28.6315, lng: 77.2167 });
   const [allergens, setAllergens] = useState(['Dairy', 'Nuts']);
   const [uploadedImageUrls, setUploadedImageUrls] = useState([]);
 
@@ -56,13 +58,16 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
 
   const handleSubmitDonation = async (e) => {
     e.preventDefault();
-    if (!aiResult || !foodId) return;
+    if (!aiResult) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
+      let finalFoodId = foodId;
+
       if (!foodId) {
+        // Step 1: Create food listing
         const formData = new FormData();
         formData.append('foodName', foodName);
         formData.append('category', category);
@@ -75,24 +80,31 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
         formData.append('storageTemperature', tempSlider);
         formData.append('packagingCondition', 'Good');
         formData.append('handlingInformation', 'Maintained in thermal storage');
-        // If images were uploaded directly through the API, pass the URLs
-        formData.append('imageUrls', JSON.stringify(uploadedImageUrls));
+        formData.append('location', location);
+        if (coordinates) {
+          formData.append('latitude', coordinates.lat);
+          formData.append('longitude', coordinates.lng);
+        }
+        if (uploadedImageUrls.length > 0) {
+          formData.append('imageUrls', JSON.stringify(uploadedImageUrls));
+        }
 
         const created = await api.createFood(formData);
-        const newFoodId = created.data._id;
-        setFoodId(newFoodId);
-        
-        // Immediately make it available after creation
-        await api.makeFoodAvailable(newFoodId);
-      } else {
-        await api.makeFoodAvailable(foodId);
+        finalFoodId = created.data._id;
+        setFoodId(finalFoodId);
       }
+
+      // Step 2: Create AI assessment (this is required for making available)
+      await api.assessFood(finalFoodId);
+
+      // Step 3: Make food available to NGOs
+      await api.makeFoodAvailable(finalFoodId);
 
       confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
 
       if (onAddNewListing) {
         onAddNewListing({
-          id: foodId,
+          id: finalFoodId,
           foodName,
           category,
           quantityKg: Number(quantityKg),
@@ -200,6 +212,15 @@ export const RegisterSurplusPage = ({ listings, onAddNewListing }) => {
                     className="w-full h-11 px-3.5 rounded-xl border border-border bg-background text-sm text-foreground focus:ring-2 focus:ring-spiceGold focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div className="pt-2">
+                <LocationPickerMap
+                  locationText={location}
+                  setLocationText={setLocation}
+                  coordinates={coordinates}
+                  setCoordinates={setCoordinates}
+                />
               </div>
 
               <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-3">

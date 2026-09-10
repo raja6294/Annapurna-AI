@@ -40,8 +40,12 @@ const createFood = async (req, res, next) => {
       exposureDuration: req.body.exposureDuration ? Number(req.body.exposureDuration) : 0,
       images: imageUrls,
       currentStatus: 'DRAFT',
-      address: req.provider.address,
+      address: req.body.location || req.provider.address,
       city: req.provider.city,
+      location: {
+        latitude: req.body.latitude ? Number(req.body.latitude) : req.provider.location.latitude,
+        longitude: req.body.longitude ? Number(req.body.longitude) : req.provider.location.longitude,
+      },
     });
 
     res.status(201).json({

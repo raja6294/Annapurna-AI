@@ -63,8 +63,8 @@ export const ProviderDeliveriesPage = () => {
         food: pickup.food,
         quantity: `${pickup.quantity} portions`,
         ngoName: pickup.ngoName,
-        distanceKm: pickup.distance,
-        travelMin: pickup.eta,
+        distanceKm: pickup.distance || 0,
+        travelMin: pickup.eta || 0,
         route: pickup.route ? `${pickup.route.distanceKm} km — ${pickup.route.durationMinutes} min` : 'Calculating...',
         redistScore: 87,
       }

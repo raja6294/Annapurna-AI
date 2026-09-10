@@ -43,6 +43,10 @@ const foodListingSchema = new mongoose.Schema(
     expiresAt: { type: Date },
     address: { type: String },
     city: { type: String },
+    location: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+    },
   },
   { timestamps: true }
 );

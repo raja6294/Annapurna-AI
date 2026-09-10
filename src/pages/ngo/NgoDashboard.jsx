@@ -1,54 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { HeartHandshake, Utensils, CheckCircle2, Clock, MapPin, Search, ArrowRight, ShieldCheck, Filter } from 'lucide-react';
+import { api } from '../../lib/api';
 
 export const NgoDashboard = ({ listings, onClaimFood }) => {
   const navigate = useNavigate();
+  const [featuredOpportunities, setFeaturedOpportunities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [claimingId, setClaimingId] = useState(null);
 
-  const featuredOpportunities = [
-    {
-      id: 'FOOD-2026-001',
-      title: 'Paneer Butter Masala + Steamed Rice',
-      provider: 'Taj Grand Kitchens & Banquet',
-      quantity: '50 kg',
-      foodType: 'Vegetarian',
-      prepTime: '1.5 hours ago',
-      storage: 'Insulated Thermal Cases',
-      window: '4h 10m',
-      distance: '4.2 km',
-      travel: '22 minutes',
-      matchScore: 96,
-      urgency: 'HIGH',
-    },
-    {
-      id: 'FOOD-2026-002',
-      title: 'Vegetable Pulao & Dal Makhani',
-      provider: 'Apex Food Processing Canteen',
-      quantity: '80 kg',
-      foodType: 'Vegetarian',
-      prepTime: '2 hours ago',
-      storage: 'Stainless Steel Hot Boxes',
-      window: '3h 40m',
-      distance: '6.8 km',
-      travel: '28 minutes',
-      matchScore: 91,
-      urgency: 'HIGH',
-    },
-    {
-      id: 'FOOD-2026-003',
-      title: 'Dal + Rice & Assorted Roti',
-      provider: 'Oberoi Catering Services',
-      quantity: '35 kg',
-      foodType: 'Vegetarian',
-      prepTime: '1 hour ago',
-      storage: 'Chilled Insulated Trays',
-      window: '5h 15m',
-      distance: '2.4 km',
-      travel: '12 minutes',
-      matchScore: 87,
-      urgency: 'MEDIUM',
-    },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.getFoodOpportunities();
+        // Get top 3 matching opportunities
+        const opportunities = (res.data || []).slice(0, 3).map((opp) => ({
+          id: opp.foodId || opp.listingId,
+          title: opp.foodName,
+          provider: opp.providerName || 'Unknown Provider',
+          quantity: `${opp.quantityKg} kg`,
+          foodType: opp.foodType || 'Vegetarian',
+          prepTime: opp.preparedAt ? new Date(opp.preparedAt).toLocaleString() : 'Unknown',
+          storage: opp.category || 'Standard Storage',
+          window: opp.remainingWindow || 'Calculating...',
+          distance: `${opp.distance || 0} km`,
+          travel: `${opp.estimatedTravelTime || '0'} minutes`,
+          matchScore: opp.matchScore || 0,
+          urgency: opp.urgency === 'fresh' ? 'LOW' : opp.urgency === 'warning' ? 'MEDIUM' : 'HIGH',
+        }));
+        setFeaturedOpportunities(opportunities);
+      } catch (err) {
+        setError(err.message);
+        setFeaturedOpportunities([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -79,23 +69,31 @@ export const NgoDashboard = ({ listings, onClaimFood }) => {
         </div>
       </div>
 
+      {error && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 text-sm">{error}</div>
+      )}
+
       {/* Top 5 Metrics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 font-mono">
         <div className="p-4 rounded-2xl bg-card border border-border shadow-sm">
           <span className="text-[11px] text-muted-foreground block">Available Food Opportunities</span>
-          <strong className="text-2xl font-display font-semibold text-foreground">24</strong>
-          <span className="text-[10px] text-mossVerified block mt-1">In 10 km radius</span>
+          <strong className="text-2xl font-display font-semibold text-foreground">{featuredOpportunities.length}</strong>
+          <span className="text-[10px] text-mossVerified block mt-1">In your area</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-card border border-border shadow-sm">
           <span className="text-[11px] text-muted-foreground block">Total Available Quantity</span>
-          <strong className="text-2xl font-display font-semibold text-foreground">1,240 kg</strong>
-          <span className="text-[10px] text-spiceGold block mt-1">~2,480 meals</span>
+          <strong className="text-2xl font-display font-semibold text-foreground">
+            {featuredOpportunities.reduce((sum, opp) => sum + parseInt(opp.quantity), 0)} kg
+          </strong>
+          <span className="text-[10px] text-spiceGold block mt-1">~{Math.round(featuredOpportunities.reduce((sum, opp) => sum + parseInt(opp.quantity), 0) * 2)} meals</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-card border border-border shadow-sm">
-          <span className="text-[11px] text-muted-foreground block">Matching Your Requirements</span>
-          <strong className="text-2xl font-display font-semibold text-spiceGold">8</strong>
+          <span className="text-[11px] text-muted-foreground block">Top Match Score</span>
+          <strong className="text-2xl font-display font-semibold text-spiceGold">
+            {Math.max(...featuredOpportunities.map(o => o.matchScore), 0)}%
+          </strong>
           <span className="text-[10px] text-spiceGold block mt-1">High compatibility</span>
         </div>
 
@@ -124,76 +122,78 @@ export const NgoDashboard = ({ listings, onClaimFood }) => {
           </Link>
         </div>
 
-        {/* Opportunity Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {featuredOpportunities.map((opp) => (
-            <div key={opp.id} className="premium-card p-6 flex flex-col justify-between border-2 border-border hover:border-spiceGold transition-all">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="px-2.5 py-0.5 rounded-full bg-spiceGold/10 text-spiceGold font-mono text-xs font-bold">
-                    Match: {opp.matchScore}%
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-brickUrgency/10 text-brickUrgency font-mono text-[10px] font-bold">
-                    {opp.urgency} URGENCY
-                  </span>
+        {loading ? (
+          <div className="p-12 text-center text-muted-foreground font-mono text-sm">
+            Loading food opportunities...
+          </div>
+        ) : featuredOpportunities.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground font-mono text-sm border border-dashed border-border rounded-2xl">
+            No food opportunities available right now. Check back soon!
+          </div>
+        ) : (
+          /* Opportunity Cards Grid */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {featuredOpportunities.map((opp) => (
+              <div key={opp.id} className="premium-card p-6 flex flex-col justify-between border-2 border-border hover:border-spiceGold transition-all">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="px-2.5 py-0.5 rounded-full bg-spiceGold/10 text-spiceGold font-mono text-xs font-bold">
+                      Match: {opp.matchScore}%
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-brickUrgency/10 text-brickUrgency font-mono text-[10px] font-bold">
+                      {opp.urgency} URGENCY
+                    </span>
+                  </div>
+
+                  <h3 className="font-display font-semibold text-lg text-foreground mb-1">
+                    🍛 {opp.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground font-mono mb-4">
+                    Provider: <strong>{opp.provider}</strong>
+                  </p>
+
+                  <div className="space-y-2 font-mono text-xs text-muted-foreground mb-6">
+                    <div className="flex justify-between border-b border-border/60 pb-1.5">
+                      <span>Available Quantity:</span>
+                      <strong className="text-foreground">{opp.quantity}</strong>
+                    </div>
+                    <div className="flex justify-between border-b border-border/60 pb-1.5">
+                      <span>Food Type:</span>
+                      <strong className="text-mossVerified">{opp.foodType}</strong>
+                    </div>
+                    <div className="flex justify-between border-b border-border/60 pb-1.5">
+                      <span>Redistribution Window:</span>
+                      <strong className="text-spiceGold">{opp.window}</strong>
+                    </div>
+                    <div className="flex justify-between border-b border-border/60 pb-1.5">
+                      <span>Distance:</span>
+                      <strong className="text-foreground">{opp.distance}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Estimated Travel:</span>
+                      <span>{opp.travel}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <h3 className="font-display font-semibold text-lg text-foreground mb-1">
-                  🍛 {opp.title}
-                </h3>
-                <p className="text-xs text-muted-foreground font-mono mb-4">
-                  Provider: <strong>{opp.provider}</strong>
-                </p>
-
-                <div className="space-y-2 font-mono text-xs text-muted-foreground mb-6">
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Available Quantity:</span>
-                    <strong className="text-foreground">{opp.quantity}</strong>
-                  </div>
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Food Type:</span>
-                    <strong className="text-mossVerified">{opp.foodType}</strong>
-                  </div>
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Prepared:</span>
-                    <span>{opp.prepTime}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Storage:</span>
-                    <span>{opp.storage}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Redistribution Window:</span>
-                    <strong className="text-spiceGold">{opp.window}</strong>
-                  </div>
-                  <div className="flex justify-between border-b border-border/60 pb-1.5">
-                    <span>Distance:</span>
-                    <strong className="text-foreground">{opp.distance}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Estimated Travel:</span>
-                    <span>{opp.travel}</span>
-                  </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={() => navigate('/ngo/food-opportunities')}
+                    className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-muted font-mono font-bold text-xs"
+                  >
+                    VIEW DETAILS
+                  </button>
+                  <button
+                    onClick={() => navigate('/ngo/food-opportunities')}
+                    className="flex-1 btn-primary-gold py-3 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm"
+                  >
+                    CLAIM FOOD
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={() => navigate('/ngo/food-opportunities')}
-                  className="flex-1 py-3 rounded-xl border border-border text-foreground hover:bg-muted font-mono font-bold text-xs"
-                >
-                  VIEW DETAILS
-                </button>
-                <button
-                  onClick={() => navigate('/ngo/incoming')}
-                  className="flex-1 btn-primary-gold py-3 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm"
-                >
-                  CLAIM FOOD
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
