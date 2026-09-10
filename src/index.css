@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Minimalist Modern Design System Tokens ── */
+
+@layer base {
+  :root {
+    --background: 40 23% 90%;           /* #EDE8DE - Milled Stone Base */
+    --foreground: 36 21% 10%;            /* #211D16 - Warm Charcoal Text */
+
+    --card: 40 30% 96%;                  /* #F7F4EC - Warm Elevated Card */
+    --card-foreground: 36 21% 10%;
+
+    --popover: 40 30% 96%;
+    --popover-foreground: 36 21% 10%;
+
+    --primary: 156 31% 11%;              /* #14261E - Pine Canopy */
+    --primary-foreground: 40 30% 96%;
+
+    --secondary: 40 20% 84%;             /* #E2DDD1 - Milled Stone Dark */
+    --secondary-foreground: 36 21% 10%;
+
+    --muted: 40 18% 86%;                 /* #E5E0D5 */
+    --muted-foreground: 36 12% 40%;      /* #5A544A - Warm Charcoal Muted */
+
+    --accent: 40 60% 45%;                /* #B98A2E - Spice Gold */
+    --accent-secondary: 156 31% 11%;    /* #14261E - Pine Canopy */
+    --accent-foreground: 0 0% 100%;
+
+    --urgent: 8 50% 36%;                 /* #8C3B2E - Brick Urgency */
+    --verified: 135 26% 33%;             /* #3F6B4A - Moss Verified */
+
+    --destructive: 8 50% 36%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 16% 80%;               /* #D8D2C5 */
+    --input: 40 16% 80%;
+    --ring: 40 60% 45%;
+
+    --radius: 0.75rem;
+
+    --glass-bg: 40 30% 96% / 0.88;
+    --glass-border: 40 16% 80% / 0.8;
+  }
+
+  .dark {
+    --background: 156 31% 9%;            /* #0E1C16 - Deep Pine Dark */
+    --foreground: 40 25% 92%;           /* #F5F2EA */
+
+    --card: 156 31% 13%;                 /* #14261E - Pine Canopy */
+    --card-foreground: 40 25% 92%;
+
+    --popover: 156 31% 13%;
+    --popover-foreground: 40 25% 92%;
+
+    --primary: 40 60% 45%;               /* #B98A2E - Spice Gold */
+    --primary-foreground: 156 31% 9%;
+
+    --secondary: 156 25% 18%;
+    --secondary-foreground: 40 25% 92%;
+
+    --muted: 156 20% 16%;
+    --muted-foreground: 40 15% 70%;
+
+    --accent: 40 60% 45%;                /* #B98A2E */
+    --accent-secondary: 156 31% 11%;
+    --accent-foreground: 0 0% 100%;
+
+    --border: 156 20% 22%;
+    --input: 156 20% 22%;
+    --ring: 40 60% 45%;
+
+    --glass-bg: 156 31% 11% / 0.9;
+    --glass-border: 156 20% 25% / 0.8;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-accent selection:text-white;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Calistoga', Georgia, serif;
+  }
+
+  /* Custom Smooth Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #0052FF; }
+  .dark ::-webkit-scrollbar-thumb { background: #334155; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #0052FF; }
+}
+
+@layer components {
+
+  /* ── Signature Spice Gold & Pine Canopy Gradient Text ── */
+  .gradient-text {
+    background: linear-gradient(135deg, #B98A2E 0%, #D4A648 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Signature Dark Canopy Gradient Text ── */
+  .gradient-text-pine {
+    background: linear-gradient(135deg, #14261E 0%, #3F6B4A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Signature Gradient Background ── */
+  .gradient-bg {
+    background: linear-gradient(135deg, #14261E 0%, #234234 100%);
+  }
+
+  .gradient-gold-bg {
+    background: linear-gradient(135deg, #B98A2E 0%, #D4A648 100%);
+  }
+
+  /* ── Section Container ── */
+  .section-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* ── Dot Grid Pattern Textures ── */
+  .dot-pattern-dark {
+    background-image: radial-gradient(circle, rgba(237, 232, 222, 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .dot-pattern-light {
+    background-image: radial-gradient(circle, rgba(33, 29, 22, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ── Glass Card ── */
+  .glass-card {
+    @apply relative overflow-hidden rounded-2xl border border-border;
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(16px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ── Premium Card ── */
+  .premium-card {
+    @apply relative overflow-hidden rounded-2xl bg-card border border-border transition-all duration-300;
+    box-shadow: 0 4px 20px -2px rgba(33, 29, 22, 0.05);
+  }
+
+  .premium-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 32px -4px rgba(185, 138, 46, 0.15), 0 0 0 1px rgba(185, 138, 46, 0.25);
+  }
+
+  /* ── 2px Gradient Border Card ── */
+  .gradient-border-card {
+    @apply relative p-[2px] rounded-2xl bg-gradient-to-br from-[#B98A2E] via-[#14261E] to-[#B98A2E] transition-all duration-300;
+    box-shadow: 0 8px 24px rgba(20, 38, 30, 0.15);
+  }
+
+  .gradient-border-card:hover {
+    box-shadow: 0 12px 32px rgba(185, 138, 46, 0.25);
+    transform: translateY(-3px);
+  }
+
+  /* ── Section Label Badges ── */
+  .section-pill-badge {
+    @apply inline-flex items-center gap-3 rounded-full border border-[#B98A2E]/30 bg-[#B98A2E]/10 px-4 py-1.5;
+  }
+
+  /* ── Tech & Monospace Badges ── */
+  .tech-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide font-medium;
+    background: rgba(20, 38, 30, 0.08);
+    color: #14261E;
+    border: 1px solid rgba(20, 38, 30, 0.2);
+    transition: all 0.2s ease;
+  }
+
+  .dark .tech-badge {
+    background: rgba(185, 138, 46, 0.15);
+    color: #D4A648;
+    border-color: rgba(185, 138, 46, 0.3);
+  }
+
+  /* ── Primary Action Buttons ── */
+  .btn-primary-pine {
+    background: #14261E;
+    color: #EDE8DE;
+    box-shadow: 0 4px 14px rgba(20, 38, 30, 0.3);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-primary-pine:hover {
+    background: #1B3328;
+    box-shadow: 0 8px 24px rgba(20, 38, 30, 0.45);
+    transform: translateY(-2px);
+  }
+
+  .btn-primary-gold {
+    background: linear-gradient(135deg, #B98A2E 0%, #D4A648 100%);
+    color: #14261E;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(185, 138, 46, 0.3);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-primary-gold:hover {
+    box-shadow: 0 8px 24px rgba(185, 138, 46, 0.45);
+    transform: translateY(-2px);
+    filter: brightness(1.06);
+  }
+
+  /* ── Radial Freshness Rings ── */
+  .freshness-ring-fresh {
+    border-color: #3F6B4A;
+  }
+
+  .freshness-ring-warning {
+    border-color: #B98A2E;
+  }
+
+  .freshness-ring-urgent {
+    border-color: #8C3B2E;
+  }
+}
