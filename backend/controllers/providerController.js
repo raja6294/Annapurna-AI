@@ -52,6 +52,7 @@ const getPickups = async (req, res, next) => {
         return {
           pickupId: pickup._id,
           ngoName: ngo?.organizationName,
+          ngoContact: ngo?.phone || 'Contact not available',
           food: food?.foodName,
           quantity: pickup.foodOfferId?.quantityAccepted || food?.numberOfPortions,
           ngoLocation: pickup.destinationLocation,
@@ -67,7 +68,26 @@ const getPickups = async (req, res, next) => {
       })
     );
 
-    res.json({ success: true, data: enriched });
+    const availableFoods = await FoodListing.find({
+      providerId: req.provider._id,
+      currentStatus: 'AVAILABLE'
+    });
+
+    const waitingPickups = availableFoods.map(food => ({
+      pickupId: null,
+      ngoName: null,
+      ngoContact: null,
+      food: food.foodName,
+      quantity: food.numberOfPortions,
+      distance: null,
+      eta: null,
+      route: null,
+      pickupStatus: 'WAITING_FOR_NGO',
+      foodListingId: food._id,
+      expiresAt: food.expiresAt,
+    }));
+
+    res.json({ success: true, data: [...enriched, ...waitingPickups] });
   } catch (error) {
     next(error);
   }

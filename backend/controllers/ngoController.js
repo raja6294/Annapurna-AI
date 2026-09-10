@@ -179,7 +179,7 @@ const acceptOffer = async (req, res, next) => {
         longitude: req.ngo.location.longitude,
         address: req.ngo.address,
       },
-      status: 'NGO_ON_THE_WAY',
+      status: 'NGO_ACCEPTED',
       startedAt: new Date(),
       etaMinutes: match.travelTime,
       distanceRemaining: match.distance,

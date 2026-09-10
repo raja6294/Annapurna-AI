@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const PICKUP_STATUSES = [
   'NOT_STARTED',
+  'NGO_ACCEPTED',
   'NGO_ON_THE_WAY',
   'ARRIVED',
   'HANDOVER_PENDING',

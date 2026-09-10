@@ -76,7 +76,7 @@ const initTrackingSocket = (io) => {
      */
     socket.on('driver:status-update', async (data) => {
       const { pickupId, status } = data;
-      const validStatuses = ['NOT_STARTED', 'NGO_ON_THE_WAY', 'ARRIVED', 'HANDOVER_PENDING', 'COMPLETED'];
+      const validStatuses = ['NOT_STARTED', 'NGO_ACCEPTED', 'NGO_ON_THE_WAY', 'ARRIVED', 'HANDOVER_PENDING', 'COMPLETED'];
       if (!pickupId || !validStatuses.includes(status)) return;
 
       try {

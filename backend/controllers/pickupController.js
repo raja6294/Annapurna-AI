@@ -84,7 +84,26 @@ const updatePickupStatus = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    if (status) pickup.status = status;
+    if (status) {
+      const validTransitions = {
+        'NOT_STARTED': ['NGO_ON_THE_WAY', 'CANCELLED'],
+        'NGO_ACCEPTED': ['NGO_ON_THE_WAY', 'CANCELLED'],
+        'NGO_ON_THE_WAY': ['ARRIVED', 'CANCELLED'],
+        'ARRIVED': ['HANDOVER_PENDING', 'COMPLETED'],
+        'HANDOVER_PENDING': ['COMPLETED'],
+        'COMPLETED': [],
+        'CANCELLED': []
+      };
+
+      const allowedNextStates = validTransitions[pickup.status] || [];
+      if (!allowedNextStates.includes(status)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid transition from ${pickup.status} to ${status}` 
+        });
+      }
+      pickup.status = status;
+    }
     if (currentLatitude) pickup.currentLatitude = currentLatitude;
     if (currentLongitude) pickup.currentLongitude = currentLongitude;
 

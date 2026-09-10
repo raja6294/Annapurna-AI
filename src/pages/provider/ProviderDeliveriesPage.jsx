@@ -8,26 +8,25 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Pickup status step machine
+// Pickup status step machine based ONLY on backend state
 const PICKUP_STEPS = [
+  { id: 'waiting_for_ngo', label: 'Waiting for NGO',  desc: 'Food is available. Waiting for NGO to claim.' },
   { id: 'ngo_accepted',    label: 'NGO Accepted',     desc: 'NGO has accepted your food' },
-  { id: 'ngo_on_the_way', label: 'NGO On The Way',   desc: 'NGO team is heading to your location' },
-  { id: 'ngo_arrived',    label: 'NGO Arrived',       desc: 'NGO team has arrived at your premises' },
-  { id: 'handover',       label: 'Handover',          desc: 'Confirming food handover' },
-  { id: 'completed',      label: 'Pickup Completed',  desc: 'Food successfully received by NGO' },
+  { id: 'ngo_on_the_way',  label: 'NGO On The Way',   desc: 'NGO team is heading to your location' },
+  { id: 'ngo_arrived',     label: 'NGO Arrived',      desc: 'NGO team has arrived at your premises' },
+  { id: 'handover',        label: 'Handover',         desc: 'Confirming food handover' },
+  { id: 'completed',       label: 'Pickup Completed', desc: 'Food successfully received by NGO' },
 ];
 
-const FALLBACK_ACCEPTANCE = {
-  food:         'Paneer Butter Masala',
-  quantity:     '50 kg',
-  portions:     200,
-  ngoName:      'Akshaya Shelter Foundation',
-  ngoContact:   '+91 98765 43210',
-  distanceKm:   4.2,
-  travelMin:    22,
-  route:        'Via NH 48 — Fastest Route (4.2 km)',
-  window:       '3h 45m remaining',
-  redistScore:  87,
+const STATUS_TO_STEP = {
+  'WAITING_FOR_NGO': 0,
+  'NGO_ACCEPTED': 1,
+  'NOT_STARTED': 1, // Fallback if someone uses old status
+  'NGO_ON_THE_WAY': 2,
+  'ARRIVED': 3,
+  'HANDOVER_PENDING': 4,
+  'HANDED_OVER': 4,
+  'COMPLETED': 5,
 };
 
 export const ProviderDeliveriesPage = () => {
@@ -35,51 +34,59 @@ export const ProviderDeliveriesPage = () => {
   const [pickup, setPickup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await api.getProviderPickups();
-        const active = (res.data || []).find((p) => p.pickupStatus !== 'COMPLETED') || res.data?.[0];
-        setPickup(active || null);
-        if (active?.pickupStatus === 'COMPLETED') {
-          setIsCompleted(true);
-          setCurrentStep(4);
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  const fetchPickups = async () => {
+    try {
+      const res = await api.getProviderPickups();
+      // Find the first non-completed pickup, or the first pickup
+      const active = (res.data || []).find((p) => p.pickupStatus !== 'COMPLETED' && p.pickupStatus !== 'CANCELLED') || res.data?.[0];
+      setPickup(active || null);
+      
+      if (active) {
+        const step = STATUS_TO_STEP[active.pickupStatus] ?? 0;
+        setCurrentStep(step);
+        setIsCompleted(active.pickupStatus === 'COMPLETED');
       }
-    };
-    load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPickups();
+    // Poll for updates (simplified alternative to socket.io if sockets aren't set up on the page)
+    const interval = setInterval(fetchPickups, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const acceptance = pickup
     ? {
-        food: pickup.food,
-        quantity: `${pickup.quantity} portions`,
-        ngoName: pickup.ngoName,
+        food: pickup.food || 'Unknown Food',
+        quantity: pickup.quantity ? `${pickup.quantity} portions` : 'Unknown',
+        ngoName: pickup.ngoName || 'Awaiting NGO...',
+        ngoContact: pickup.ngoContact || 'Contact not available',
         distanceKm: pickup.distance || 0,
         travelMin: pickup.eta || 0,
-        route: pickup.route ? `${pickup.route.distanceKm} km — ${pickup.route.durationMinutes} min` : 'Calculating...',
+        route: pickup.route ? `${pickup.route.distanceKm} km — ${pickup.route.durationMinutes} min` : (pickup.pickupStatus === 'WAITING_FOR_NGO' ? 'Waiting for route...' : 'Calculating...'),
         redistScore: 87,
+        window: pickup.expiresAt ? `${Math.max(0, Math.round((new Date(pickup.expiresAt) - new Date()) / 60000))} min remaining` : 'N/A'
       }
-    : FALLBACK_ACCEPTANCE;
+    : null;
 
   const currentStepData = PICKUP_STEPS[currentStep];
   const isLastStep = currentStep === PICKUP_STEPS.length - 1;
 
   const handleAdvanceStep = async () => {
-    if (currentStep === 3 && pickup?.pickupId) {
+    if (currentStep === 4 && pickup?.pickupId) {
       setIsConfirming(true);
       try {
         await api.confirmHandover(pickup.pickupId);
-        setIsCompleted(true);
-        setCurrentStep(4);
+        await fetchPickups(); // Refresh from backend
       } catch (err) {
         setError(err.message);
       } finally {
@@ -87,12 +94,8 @@ export const ProviderDeliveriesPage = () => {
       }
       return;
     }
-
-    if (isLastStep) {
-      setIsCompleted(true);
-    } else {
-      setCurrentStep((s) => s + 1);
-    }
+    // We only allow backend transitions, frontend cannot fake steps!
+    // Provider can only click "CONFIRM HANDOVER COMPLETE" when currentStep is 4 (Handover)
   };
 
   if (loading) {
@@ -100,13 +103,8 @@ export const ProviderDeliveriesPage = () => {
   }
 
   const getStepActionLabel = () => {
-    switch (currentStep) {
-      case 1: return 'NGO En Route — Waiting for Arrival';
-      case 2: return 'CONFIRM NGO ARRIVED';
-      case 3: return 'CONFIRM HANDOVER COMPLETE';
-      case 4: return 'MARK PICKUP COMPLETED';
-      default: return null;
-    }
+    if (currentStep === 4) return 'CONFIRM HANDOVER COMPLETE';
+    return null;
   };
 
   return (
@@ -182,7 +180,8 @@ export const ProviderDeliveriesPage = () => {
           {/* Left: NGO Acceptance Card + Status Stepper */}
           <div className="lg:col-span-5 space-y-6">
 
-            {/* NGO Accepted Banner */}
+            {/* NGO Accepted Banner (Only show if NGO has claimed) */}
+            {currentStep >= 1 && (
             <motion.div
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -234,6 +233,7 @@ export const ProviderDeliveriesPage = () => {
                 </span>
               </div>
             </motion.div>
+            )}
 
             {/* Status Stepper */}
             <div className="premium-card p-6">
@@ -275,9 +275,9 @@ export const ProviderDeliveriesPage = () => {
 
               {/* Action Button */}
               <AnimatePresence mode="wait">
-                {currentStep >= 2 && (
+                {currentStep === 4 && (
                   <motion.button
-                    key={currentStep}
+                    key="handover"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
@@ -288,15 +288,26 @@ export const ProviderDeliveriesPage = () => {
                     <span>{getStepActionLabel()}</span>
                   </motion.button>
                 )}
-                {currentStep === 1 && (
+                {currentStep < 4 && currentStep > 0 && (
                   <motion.div
-                    key="waiting"
+                    key="waiting_action"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="mt-6 w-full py-4 rounded-xl border-2 border-dashed border-spiceGold/40 flex items-center justify-center gap-2 text-spiceGold font-mono text-xs font-bold"
                   >
                     <Truck className="h-4 w-4 animate-bounce" />
-                    <span>NGO En Route — Waiting for Arrival</span>
+                    <span>{currentStep === 1 ? 'Waiting for NGO to start route' : currentStep === 2 ? 'NGO En Route' : 'NGO Arrived - Please Handover'}</span>
+                  </motion.div>
+                )}
+                {currentStep === 0 && (
+                  <motion.div
+                    key="waiting_ngo"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="mt-6 w-full py-4 rounded-xl border-2 border-dashed border-muted-foreground/40 flex items-center justify-center gap-2 text-muted-foreground font-mono text-xs font-bold"
+                  >
+                    <HeartHandshake className="h-4 w-4" />
+                    <span>Awaiting NGO claim...</span>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -307,6 +318,7 @@ export const ProviderDeliveriesPage = () => {
           <div className="lg:col-span-7 space-y-6">
 
             {/* Route Visualization */}
+            {currentStep > 0 && (
             <div className="rounded-2xl bg-pineCanopy overflow-hidden relative min-h-[400px] p-6 text-white shadow-xl flex flex-col justify-between">
               <div className="absolute inset-0 opacity-20 pointer-events-none"
                 style={{ backgroundImage: 'radial-gradient(circle, rgba(185,138,46,0.15) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
@@ -382,6 +394,7 @@ export const ProviderDeliveriesPage = () => {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Food Summary Card */}
             <div className="premium-card p-6">
